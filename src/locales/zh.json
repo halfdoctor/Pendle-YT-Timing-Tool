@@ -10,6 +10,8 @@
     "language": "中文",
     "theme": "深/浅色",
     "menu": "菜单",
+    "mainTab": "计算器",
+    "analysisTab": "市场分析",
     "run": "运行"
   },
     "chart": {
@@ -78,6 +80,19 @@
     "yes": "是",
     "no": "否",
     "unknown": "未知"
+  },
+  "analysis": {
+    "title": "市场分析",
+    "description": "自动获取和分析 10 个活跃市场的 YT 价格和下降率数据",
+    "analyzeMarkets": "分析市场",
+    "analyzingMarkets": "正在分析市场...",
+    "marketResults": "市场分析结果",
+    "currentYTPrice": "当前 YT 价格",
+    "declineRate": "平均下降率",
+    "volume": "成交量",
+    "impliedApy": "隐含年化收益率",
+    "maturity": "到期时间",
+    "chartTitle": "市场数据分析"
   },
   "language": {
     "en": "English",

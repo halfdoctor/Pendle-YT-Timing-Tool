@@ -15,8 +15,14 @@ import {
 import { Menu } from 'lucide-react';
 import { useTheme } from '@/hooks/theme-context';
 import Container from './Container';
+import type { TabType } from '../App';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  activeTab: TabType;
+  onTabChange: (tab: TabType) => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ activeTab, onTabChange }) => {
   const { t, i18n } = useTranslation();
   const { setTheme } = useTheme();
 
@@ -36,7 +42,7 @@ const Header: React.FC = () => {
       {/* Centered container to align with main content */}
       <Container className="py-2 sm:py-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Left side - Title and badges */}
+          {/* Left side - Logo and title */}
           <div className="flex items-center gap-4 min-w-0">
             {/* Pendle logo */}
             <div className="w-12 h-12 rounded-full overflow-hidden">
@@ -52,13 +58,27 @@ const Header: React.FC = () => {
               <h1 className="text-xl font-bold truncate">
                 {t('header.title')}
               </h1>
-
-              {/* Badges */}
-              <div className="hidden md:flex items-center space-x-2 mt-1">
-                {/* Hide badge on smaller screens to prevent overflow */}
-                <span className="px-2 py-1 bg-muted badge-enhanced text-muted-foreground text-xs rounded-full truncate">
-                  {t('header.secureBackend')}
-                </span>
+              
+              {/* Tab Navigation */}
+              <div className="mt-2">
+                <div className="flex space-x-2">
+                  <Button
+                    variant={activeTab === 'main' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => onTabChange('main')}
+                    className="text-xs h-7 px-3"
+                  >
+                    {t('header.mainTab')}
+                  </Button>
+                  <Button
+                    variant={activeTab === 'analysis' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => onTabChange('analysis')}
+                    className="text-xs h-7 px-3"
+                  >
+                    {t('header.analysisTab')}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

@@ -10,6 +10,8 @@
     "language": "中文",
     "theme": "Dark/Light",
     "menu": "Menu",
+    "mainTab": "Calculator",
+    "analysisTab": "Market Analysis",
     "run": "Run"
   },
     "chart": {
@@ -78,6 +80,19 @@
     "yes": "Yes",
     "no": "No",
     "unknown": "Unknown"
+  },
+  "analysis": {
+    "title": "Market Analysis",
+    "description": "Automatically fetch and analyze 10 active markets with YT price and decline rate data",
+    "analyzeMarkets": "Analyze Markets",
+    "analyzingMarkets": "Analyzing markets...",
+    "marketResults": "Market Analysis Results",
+    "currentYTPrice": "Current YT Price",
+    "declineRate": "Avg. Decline Rate",
+    "volume": "Volume",
+    "impliedApy": "Implied APY",
+    "maturity": "Maturity",
+    "chartTitle": "Market Data Analysis"
   },
   "language": {
     "en": "English",

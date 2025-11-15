@@ -106,3 +106,5 @@ temp/
 # Local Netlify folder
 .netlify
 .vite
+pendle_market_analysis/__pycache__/*
+venv/*

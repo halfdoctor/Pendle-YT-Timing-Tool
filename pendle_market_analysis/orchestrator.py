@@ -26,11 +26,11 @@ class AnalysisOrchestrator:
     MARKETS_TO_ANALYZE = 10  # Process markets number
     MARKET_BATCH_DELAY = 5  # Reduced from 9 seconds
     
-    def __init__(self, chain_id: int = 1):
+    def __init__(self, chain_id: int = 1, cache_duration_hours: int = 24):
         self.chain_id = chain_id
         self.api_client = PendleAPIClient(chain_id)
         self.analyzer = PendleAnalyzer()
-        self.notifier = Notifier(chain_id, self.api_client.chain_name)
+        self.notifier = Notifier(chain_id, self.api_client.chain_name, cache_duration_hours)
         
         # Setup semaphore for concurrency control
         self.semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_MARKETS)
@@ -79,7 +79,8 @@ class AnalysisOrchestrator:
                     return
                 
                 # Select markets to analyze
-                markets_to_analyze = active_markets[:self.MARKETS_TO_ANALYZE]  # Limit for testing
+                # markets_to_analyze = active_markets[:self.MARKETS_TO_ANALYZE]  # Limit for testing
+                markets_to_analyze = active_markets
                 print(f"📊 Processing {len(markets_to_analyze)} markets with {self.MAX_CONCURRENT_MARKETS} concurrent workers")
                 
                 # Process markets with proper rate limiting

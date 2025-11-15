@@ -41,10 +41,10 @@ class OptimizedPendleAnalyzer:
     MARKET_BATCH_DELAY = 5
     MARKETS_TO_ANALYZE = 10
     
-    def __init__(self, chain_id: int = 1):
+    def __init__(self, chain_id: int = 1, cache_duration_hours: int = 24):
         self.chain_id = chain_id
         # Create the new orchestrator which handles everything
-        self.orchestrator = AnalysisOrchestrator(chain_id)
+        self.orchestrator = AnalysisOrchestrator(chain_id, cache_duration_hours)
         
         # Legacy compatibility - expose some attributes
         self.TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -119,20 +119,20 @@ class OptimizedPendleAnalyzer:
 
 
 # Legacy convenience functions for direct compatibility
-async def analyze_single_chain(chain_id: int) -> None:
+async def analyze_single_chain(chain_id: int, cache_duration_hours: int = 24) -> None:
     """Legacy convenience function"""
-    orchestrator = AnalysisOrchestrator(chain_id)
+    orchestrator = AnalysisOrchestrator(chain_id, cache_duration_hours)
     await orchestrator.run_analysis()
 
 
-async def analyze_all_chains() -> None:
+async def analyze_all_chains(cache_duration_hours: int = 24) -> None:
     """Legacy convenience function"""
     from pendle_market_analysis.orchestrator import MultiChainAnalysisOrchestrator
     
     # Create orchestrators for all supported chains
     chain_orchestrators = []
     for chain_id in PendleAPIClient.CHAINS.keys():
-        chain_orchestrators.append(AnalysisOrchestrator(chain_id))
+        chain_orchestrators.append(AnalysisOrchestrator(chain_id, cache_duration_hours))
     
     # Create multi-chain orchestrator and run analysis
     multi_orchestrator = MultiChainAnalysisOrchestrator(chain_orchestrators)

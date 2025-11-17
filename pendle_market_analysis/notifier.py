@@ -33,10 +33,27 @@ class NotificationCache:
         return {}
     
     def _save_cache(self) -> None:
-        """Save notification cache to file"""
+        """Save notification cache to file using append-style logging"""
         try:
+            # Load existing cache if file exists, then merge with current cache
+            existing_cache = {}
+            if os.path.exists(self.cache_file):
+                with open(self.cache_file, 'r') as f:
+                    try:
+                        existing_cache = json.load(f)
+                    except json.JSONDecodeError:
+                        # If file is corrupted, start fresh
+                        existing_cache = {}
+            
+            # Merge existing cache with current cache (current cache takes precedence)
+            merged_cache = {**existing_cache, **self.cache}
+            
+            # Save merged cache back to file
             with open(self.cache_file, 'w') as f:
-                json.dump(self.cache, f, indent=2)
+                json.dump(merged_cache, f, indent=2)
+                
+            # Update in-memory cache with merged result
+            self.cache = merged_cache
         except Exception as e:
             print(f"⚠️ Failed to save notification cache: {e}")
     

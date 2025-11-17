@@ -28,7 +28,7 @@ except ImportError:
 
 # Import from the optimized modular structure
 from pendle_market_analysis.models import Market, Transaction, DeclineRateAnalysis, PendleApiError
-from pendle_market_analysis.api_client import PendleAPIClient  # Now uses optimized version
+from pendle_market_analysis.api_client import PendleAPIClientOptimized  # Now uses enhanced version
 from pendle_market_analysis.analyzer import PendleAnalyzer
 from pendle_market_analysis.notifier import Notifier
 from pendle_market_analysis.orchestrator import AnalysisOrchestrator
@@ -132,7 +132,7 @@ async def analyze_all_chains(cache_duration_hours: int = 24) -> None:
     
     # Create orchestrators for all supported chains
     chain_orchestrators = []
-    for chain_id in PendleAPIClient.CHAINS.keys():
+    for chain_id in PendleAPIClientOptimized.CHAINS.keys():
         chain_orchestrators.append(AnalysisOrchestrator(chain_id, cache_duration_hours))
     
     # Create multi-chain orchestrator and run analysis

@@ -34,21 +34,35 @@ class RequestMetrics:
 
 @dataclass
 class RateLimitState:
-    """Manage rate limiting state and computing unit tracking"""
+    """Manage rate limiting state and computing unit tracking with adaptive behavior"""
     tokens_per_second: float = 5.0  # Conservative rate limit
     computing_unit_budget: int = 1000  # Daily budget
+    max_retry_duration: float = 30.0  # Maximum retry duration in seconds
     
     def __post_init__(self):
         self.computing_units: Dict[str, int] = defaultdict(int)
         self.request_times: deque = deque(maxlen=100)  # Track last 100 requests
+        self.rate_limit_violations: deque = deque(maxlen=50)  # Track rate limit violations
+        self.adaptive_cooldown: float = 0.0  # Additional cooldown based on violations
+        self.last_reset_date: date = datetime.now().date()
     
     def can_make_request(self, endpoint: str = "", computing_units: int = 1) -> bool:
         """Check if we can make a request without hitting rate limits"""
         now = time.time()
         
+        # Check if we need to reset daily budget
+        self._check_daily_reset()
+        
         # Clean old requests (older than 1 second)
         while self.request_times and now - self.request_times[0] > 1.0:
             self.request_times.popleft()
+        
+        # Apply adaptive cooldown if we've been rate limited recently
+        if self.adaptive_cooldown > 0:
+            if now - self.rate_limit_violations[-1] if self.rate_limit_violations else 0 < self.adaptive_cooldown:
+                return False
+            else:
+                self.adaptive_cooldown = 0.0  # Reset adaptive cooldown
         
         # Check if we're within rate limits
         if len(self.request_times) >= self.tokens_per_second:
@@ -66,9 +80,62 @@ class RateLimitState:
         self.computing_units[endpoint] += computing_units
         self.computing_unit_budget -= computing_units
     
+    def record_rate_limit_violation(self, retry_after: Optional[float] = None):
+        """Record a rate limit violation and adjust adaptive behavior"""
+        now = time.time()
+        self.rate_limit_violations.append(now)
+        
+        # Increase adaptive cooldown based on recent violations
+        recent_violations = [t for t in self.rate_limit_violations if now - t < 300]  # Last 5 minutes
+        
+        if len(recent_violations) > 3:
+            self.adaptive_cooldown = min(5.0, len(recent_violations) * 0.5)  # Max 5 second cooldown
+        
+        # Use Retry-After header value if provided
+        if retry_after:
+            self.adaptive_cooldown = max(self.adaptive_cooldown, retry_after)
+    
+    def get_recommended_delay(self) -> float:
+        """Get recommended delay before next request based on current state"""
+        now = time.time()
+        
+        # Base delay from adaptive cooldown
+        delay = self.adaptive_cooldown if self.adaptive_cooldown > 0 else 0
+        
+        # Add delay based on recent rate limit violations
+        recent_violations = [t for t in self.rate_limit_violations if now - t < 60]  # Last minute
+        if recent_violations:
+            delay = max(delay, len(recent_violations) * 0.5)
+        
+        return min(delay, self.max_retry_duration)
+    
+    def _check_daily_reset(self):
+        """Reset daily computing unit budget if new day"""
+        current_date = datetime.now().date()
+        if current_date > self.last_reset_date:
+            self.reset_budget()
+            self.last_reset_date = current_date
+    
     def reset_budget(self):
         """Reset daily computing unit budget"""
         self.computing_unit_budget = 1000
+        self.computing_units.clear()
+        self.rate_limit_violations.clear()
+        self.adaptive_cooldown = 0.0
+    
+    def get_metrics_summary(self) -> Dict[str, Any]:
+        """Get current rate limiting metrics for monitoring"""
+        now = time.time()
+        recent_violations = [t for t in self.rate_limit_violations if now - t < 300]  # Last 5 minutes
+        
+        return {
+            'tokens_per_second': self.tokens_per_second,
+            'computing_unit_budget_remaining': self.computing_unit_budget,
+            'recent_rate_limit_violations': len(recent_violations),
+            'adaptive_cooldown': self.adaptive_cooldown,
+            'requests_in_last_second': len([t for t in self.request_times if now - t < 1.0]),
+            'last_reset_date': self.last_reset_date.isoformat()
+        }
 
 
 @dataclass
@@ -86,7 +153,18 @@ class CacheEntry:
 class PendleAPIClientOptimized:
     """Enhanced Pendle API client with advanced optimization features"""
     
+    # API version tracking for compatibility
+    API_VERSION = "v4"
     BASE_URL = "https://api-v2.pendle.finance/core"
+    
+    # Version mapping for different endpoints
+    ENDPOINT_VERSIONS = {
+        "markets": "v1",
+        "transactions": "v4",
+        "limit-orders": "v2",
+        "prices": "v1",
+        "assets": "v1"
+    }
     
     CHAINS = {
         1: "Ethereum",
@@ -101,14 +179,16 @@ class PendleAPIClientOptimized:
         80094: "Berachain"
     }
     
-    # API endpoint computing unit costs based on documentation
+    # API endpoint computing unit costs based on API specification
     COMPUTING_UNIT_COSTS = {
-        "limit-orders": 3,
-        "markets": 1,
-        "transactions": 2,
-        "prices": 1,
-        "assets": 1,
-        "sdk": 5  # Higher cost for SDK endpoints
+        "limit-orders": 3,  # Limit order endpoints
+        "markets": 1,       # Market endpoints
+        "transactions": 2,  # Transaction endpoints
+        "prices": 1,        # Price endpoints
+        "assets": 1,        # Asset endpoints
+        "takers": 8,        # Taker limit order matching (high cost)
+        "makers": 5,        # Maker limit order endpoints
+        "sdk": 5            # SDK endpoints
     }
     
     # Cache TTL settings (in seconds)
@@ -292,16 +372,19 @@ class PendleAPIClientOptimized:
                         retry_after = response.headers.get('Retry-After')
                         if retry_after:
                             delay = float(retry_after)
+                            self.rate_limiter.record_rate_limit_violation(delay)
                         else:
                             # Exponential backoff based on documentation (160ms + random)
                             delay = (self.BASE_DELAY_MS / 1000) * (2 ** retry_count) + random.uniform(0, 0.5)
+                            self.rate_limiter.record_rate_limit_violation()
                         
                         print(f"    ⏱️ Rate limited (429), retrying in {delay:.1f}s...")
                         await asyncio.sleep(delay)
                         continue
                         
                     else:
-                        raise PendleApiError(f"HTTP error {response.status}: {response.reason}")
+                        # Use enhanced error handling with detailed information
+                        raise PendleApiError.from_response(response, endpoint)
                         
             except aiohttp.ClientError as e:
                 last_exception = e
@@ -346,6 +429,93 @@ class PendleAPIClientOptimized:
         """Clean up resources"""
         if self._session and not self._session.closed:
             await self._session.close()
+    
+    def get_api_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive API metrics for monitoring"""
+        rate_limit_metrics = self.rate_limiter.get_metrics_summary()
+        
+        return {
+            'request_metrics': {
+                'total_requests': self.metrics.total_requests,
+                'rate_limited': self.metrics.rate_limited,
+                'cache_hits': self.metrics.cache_hits,
+                'cache_misses': self.metrics.cache_misses,
+                'cache_hit_rate': self.metrics.cache_hits / max(1, self.metrics.cache_hits + self.metrics.cache_misses),
+                'avg_response_time': self.metrics.avg_response_time,
+                'computing_units_used': self.metrics.computing_units_used
+            },
+            'rate_limit_metrics': rate_limit_metrics,
+            'configuration': {
+                'chain_id': self.chain_id,
+                'chain_name': self.chain_name,
+                'enable_cache': self.enable_cache,
+                'max_concurrent': self.max_concurrent,
+                'api_version': self.API_VERSION
+            },
+            'performance_indicators': {
+                'requests_per_minute': len([t for t in self.rate_limiter.request_times if time.time() - t < 60]),
+                'error_rate': self.metrics.rate_limited / max(1, self.metrics.total_requests),
+                'efficiency_score': self._calculate_efficiency_score()
+            }
+        }
+    
+    def _calculate_efficiency_score(self) -> float:
+        """Calculate efficiency score based on cache hits, response times, and error rates"""
+        if self.metrics.total_requests == 0:
+            return 1.0
+        
+        cache_efficiency = self.metrics.cache_hits / max(1, self.metrics.total_requests)
+        time_efficiency = max(0, 1 - (self.metrics.avg_response_time / 10.0))  # Penalty for slow responses
+        error_penalty = max(0, 1 - (self.metrics.rate_limited / max(1, self.metrics.total_requests)))
+        
+        return (cache_efficiency * 0.4 + time_efficiency * 0.4 + error_penalty * 0.2)
+    
+    def reset_metrics(self):
+        """Reset all metrics for a fresh analysis run"""
+        self.metrics = RequestMetrics()
+        self.rate_limiter.reset_budget()
+        
+        # Clear cache if requested
+        if self.enable_cache:
+            self._memory_cache.clear()
+    
+    def log_performance_summary(self):
+        """Log a comprehensive performance summary"""
+        metrics = self.get_api_metrics()
+        
+        print(f"\n📊 API Performance Summary for {metrics['configuration']['chain_name']}:")
+        print(f"  Requests: {metrics['request_metrics']['total_requests']}")
+        print(f"  Cache Hit Rate: {metrics['request_metrics']['cache_hit_rate']:.2%}")
+        print(f"  Avg Response Time: {metrics['request_metrics']['avg_response_time']:.3f}s")
+        print(f"  Rate Limited: {metrics['request_metrics']['rate_limited']}")
+        print(f"  Efficiency Score: {metrics['performance_indicators']['efficiency_score']:.3f}/1.0")
+        print(f"  Computing Units Remaining: {metrics['rate_limit_metrics']['computing_unit_budget_remaining']}")
+        print(f"  Active Rate Limit Violations: {metrics['rate_limit_metrics']['recent_rate_limit_violations']}")
+    
+    def validate_cache_keys(self) -> Dict[str, bool]:
+        """Validate cache key generation for all relevant endpoints"""
+        validation_results = {}
+        
+        # Test cache key generation for different endpoint types
+        test_cases = [
+            ("markets", {"chainId": "1"}, "Market data"),
+            ("transactions", {"market": "0x123", "limit": "100"}, "Transaction data"),
+            ("prices", {"asset": "0x456"}, "Price data"),
+            ("assets", {"address": "0x789"}, "Asset data")
+        ]
+        
+        for endpoint, params, description in test_cases:
+            cache_key = self._get_cache_key(endpoint, params)
+            cache_path = self._get_cache_path(cache_key)
+            
+            validation_results[description] = {
+                'cache_key': cache_key,
+                'cache_path': str(cache_path),
+                'key_length': len(cache_key),
+                'path_exists': cache_path.parent.exists()
+            }
+        
+        return validation_results
     
     async def get_active_markets(self, session: Optional[aiohttp.ClientSession] = None) -> List[Market]:
         """Enhanced market fetching with caching and optimization"""
@@ -434,7 +604,7 @@ class PendleAPIClientOptimized:
         pages = 0
         seen_ids = set()
         
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone, date
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.DAYS_OF_DATA)
         
         # Enhanced filtering for better performance

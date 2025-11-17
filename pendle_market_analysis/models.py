@@ -75,15 +75,10 @@ class PendleApiError(Exception):
     def from_response(cls, response, endpoint: Optional[str] = None) -> 'PendleApiError':
         """Create error from aiohttp response"""
         try:
-            response_data = response.json() if response.content_type == 'application/json' else None
-            if response_data and isinstance(response_data, dict):
-                error_message = response_data.get('message') or response_data.get('error') or str(response.reason)
-                error_code = response_data.get('code') or response_data.get('errorCode')
-                details = response_data.get('details') or response_data
-            else:
-                error_message = f"HTTP {response.status}: {response.reason}"
-                error_code = None
-                details = None
+            # Don't attempt to parse JSON synchronously - just get basic info
+            error_message = f"HTTP {response.status}: {response.reason}"
+            error_code = None
+            details = None
         except Exception:
             error_message = f"HTTP {response.status}: {response.reason}"
             error_code = None

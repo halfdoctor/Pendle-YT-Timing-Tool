@@ -12,8 +12,8 @@ from typing import List
 import aiohttp
 
 from pendle_market_analysis.models import PendleApiError, AnalysisError, NotificationError
-from pendle_market_analysis.api_client import PendleAPIClient
-from pendle_market_analysis.analyzer import PendleAnalyzer
+from pendle_market_analysis.api_client import PendleAPIClientOptimized
+from pendle_market_analysis.enhanced_analyzer import EnhancedPendleAnalyzer
 from pendle_market_analysis.notifier import Notifier
 from pendle_market_analysis.models import DeclineRateAnalysis, Market
 
@@ -29,14 +29,14 @@ class AnalysisOrchestrator:
     def __init__(self, chain_id: int = 1, cache_duration_hours: int = 24):
         self.chain_id = chain_id
         # Use optimized API client with advanced features
-        self.api_client = PendleAPIClient(chain_id)
-        self.analyzer = PendleAnalyzer()
+        self.api_client = PendleAPIClientOptimized(chain_id)
+        self.analyzer = EnhancedPendleAnalyzer(self.api_client)
         self.notifier = Notifier(chain_id, self.api_client.chain_name, cache_duration_hours)
         
         # Setup semaphore for concurrency control
         self.semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_MARKETS)
     
-    async def analyze_single_market(self, session: aiohttp.ClientSession, 
+    async def analyze_single_market(self, session: aiohttp.ClientSession,
                                   market: Market, index: int, total: int) -> DeclineRateAnalysis:
         """Analyze a single market with concurrency control"""
         async with self.semaphore:
@@ -46,18 +46,35 @@ class AnalysisOrchestrator:
                 # Fetch transactions for this market
                 transactions = await self.api_client.get_transactions(session, market.address)
                 
-                # Analyze the market
-                analysis = self.analyzer.analyze_market(market, transactions)
+                # Analyze the market using enhanced optimization
+                analysis = await self.analyzer.analyze_market_with_optimization(
+                    session, market, index, total, strategy_name='balanced'
+                )
+                
+                # Handle None returns with fallback analysis
+                if analysis is None:
+                    # Create minimal fallback analysis
+                    analysis = self._create_fallback_analysis(market)
+                
                 return analysis
                 
             except Exception as e:
                 print(f"    ❌ Analysis failed: {e}")
-                return DeclineRateAnalysis(
-                    market=market, current_yt_price=0.0, average_decline_rate=0.0,
-                    latest_daily_decline_rate=0.0, decline_rate_exceeds_average=False,
-                    volume_usd=0.0, implied_apy=0.0, transaction_count=0,
-                    data_freshness_hours=0.0
-                )
+                return self._create_fallback_analysis(market)
+    
+    def _create_fallback_analysis(self, market: Market) -> DeclineRateAnalysis:
+        """Create fallback analysis when optimization fails"""
+        return DeclineRateAnalysis(
+            market=market,
+            current_yt_price=0.0,
+            average_decline_rate=0.0,
+            latest_daily_decline_rate=0.0,
+            decline_rate_exceeds_average=False,
+            volume_usd=0.0,
+            implied_apy=0.0,
+            transaction_count=0,
+            data_freshness_hours=24.0
+        )
     
     async def run_analysis(self):
         """Run the complete market analysis workflow"""

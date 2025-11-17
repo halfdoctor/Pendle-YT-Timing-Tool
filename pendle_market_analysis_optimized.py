@@ -29,7 +29,8 @@ except ImportError:
 # Import from the optimized modular structure
 from pendle_market_analysis.models import Market, Transaction, DeclineRateAnalysis, PendleApiError
 from pendle_market_analysis.api_client import PendleAPIClientOptimized  # Now uses enhanced version
-from pendle_market_analysis.analyzer import PendleAnalyzer
+from pendle_market_analysis.enhanced_analyzer import EnhancedPendleAnalyzer  # Use enhanced analyzer
+from pendle_market_analysis.enhanced_analyzer import SmartBatchProcessor  # Use smart batch processor
 from pendle_market_analysis.notifier import Notifier
 from pendle_market_analysis.orchestrator import AnalysisOrchestrator
 
@@ -73,7 +74,9 @@ class OptimizedPendleAnalyzer:
     
     def calculate_decline_rates_fast(self, transactions: List[Transaction]) -> Tuple[float, float, float]:
         """Legacy method - delegates to analyzer"""
-        return self.orchestrator.analyzer.calculate_decline_rates_fast(transactions)
+        avg_decline, latest_decline = self.orchestrator.analyzer.calculate_decline_rates_fast(transactions)
+        # Return 3 values as expected by legacy code
+        return avg_decline, latest_decline, avg_decline  # Use avg_decline as third value
     
     def calculate_current_yt_price_fast(self, transactions: List[Transaction]) -> float:
         """Legacy method - delegates to analyzer"""

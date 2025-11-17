@@ -13,7 +13,7 @@ import time
 import urllib.parse
 from collections import defaultdict, deque
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 import aiohttp

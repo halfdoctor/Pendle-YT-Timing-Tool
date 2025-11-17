@@ -145,7 +145,9 @@ class EnhancedPendleAnalyzer:
         
         # Calculate decline rates
         avg_decline, latest_decline = self.calculate_decline_rates_fast(transactions)
-        exceeds_average = latest_decline > avg_decline * 1.1 if avg_decline > 0 else False
+        minimal_multiplier = 1.5
+        minimal_notifiable_decline = 0.5
+        exceeds_average = (latest_decline > avg_decline * minimal_multiplier) and (latest_decline > minimal_notifiable_decline) if avg_decline > 0 else False
         
         return DeclineRateAnalysis(
             market=market,

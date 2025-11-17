@@ -159,33 +159,34 @@ class Notifier:
         alert_markets = [a for a in analysis_results if a.decline_rate_exceeds_average]
         if alert_markets:
             print(f"\n🚨 IMMEDIATE ATTENTION REQUIRED:")
-            for analysis in sorted(alert_markets, key=lambda x: abs(x.latest_daily_decline_rate), reverse=True):
+            for analysis in sorted(alert_markets, key=lambda x: x.latest_daily_decline_rate, reverse=False):  # Most negative first
                 maturity_date = datetime.fromisoformat(analysis.market.expiry.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+                acceleration = abs(analysis.latest_daily_decline_rate) - abs(analysis.average_decline_rate)
                 print(f"  🔴 {analysis.market.name}")
-                print(f"      Decline: {abs(analysis.latest_daily_decline_rate):.2f}%/day (avg: {abs(analysis.average_decline_rate):.2f}%)")
-                print(f"      Volume: ${analysis.volume_usd:,.0f} | APY: {analysis.implied_apy*100:.1f}% | Maturity: {maturity_date}")
+                print(f"      Decay Acceleration: {abs(analysis.latest_daily_decline_rate):.2f}%/day (avg: {abs(analysis.average_decline_rate):.2f}%/day)")
+                print(f"      Acceleration: +{acceleration:.2f}% vs average | Volume: ${analysis.volume_usd:,.0f} | APY: {analysis.implied_apy*100:.1f}% | Maturity: {maturity_date}")
         else:
             print(f"\n✅ NO ALERT MARKETS FOUND")
         
         # Summary Table
         print(f"\n📋 ANALYSIS SUMMARY:")
-        print(f"{'Market':<35} {'Decline Rate':<15} {'Volume':<12} {'APY':<8} {'Data Fresh':<12}")
+        print(f"{'Market':<35} {'Decay Rate':<15} {'Volume':<12} {'APY':<8} {'Data Fresh':<12}")
         print("-" * 85)
         
         for analysis in analysis_results:
             market_name = analysis.market.name[:33]
             if analysis.decline_rate_exceeds_average:
-                decline_str = f"🚨{abs(analysis.latest_daily_decline_rate):.1f}%"
+                decay_str = f"🚨{abs(analysis.latest_daily_decline_rate):.1f}%"
             elif abs(analysis.average_decline_rate) > 0.1:
-                decline_str = f"{analysis.latest_daily_decline_rate:+.1f}%"
+                decay_str = f"{analysis.latest_daily_decline_rate:+.1f}%"
             else:
-                decline_str = "Stable"
+                decay_str = "Stable"
             
             volume_str = f"${analysis.volume_usd/1000:.0f}k" if analysis.volume_usd > 0 else "N/A"
             apy_str = f"{analysis.implied_apy*100:.1f}%" if analysis.implied_apy > 0 else "N/A"
             freshness = f"{analysis.data_freshness_hours:.1f}h"
             
-            print(f"{market_name:<35} {decline_str:<15} {volume_str:<12} {apy_str:<8} {freshness:<12}")
+            print(f"{market_name:<35} {decay_str:<15} {volume_str:<12} {apy_str:<8} {freshness:<12}")
         
         # Statistics
         total_volume = sum(a.volume_usd for a in analysis_results)
@@ -194,11 +195,11 @@ class Notifier:
         print(f"\n📊 PERFORMANCE METRICS:")
         print(f"  💰 Total Volume: ${total_volume:,.0f}")
         print(f"  ⚡ Average Data Freshness: {avg_freshness:.1f} hours")
-        print(f"  🚨 Alert Markets: {len(alert_markets)}/{len(analysis_results)}")
+        print(f"  🚨 Acceleration Alerts: {len(alert_markets)}/{len(analysis_results)}")
         
         if alert_markets:
             max_decline = max(abs(a.latest_daily_decline_rate) for a in alert_markets)
-            print(f"  📈 Highest Decline Rate: {max_decline:.2f}%/day")
+            print(f"  📈 Highest Decay Acceleration: {max_decline:.2f}%/day")
         
         print(f"\n" + "="*90)
         
@@ -270,9 +271,9 @@ class Notifier:
         chain_info = f"{self.chain_name} (ID: {self.chain_id})"
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
         
-        message = f"🚨 <b>Pendle Market Alert</b>\n\n"
+        message = f"🚨 <b>Pendle Acceleration Alert</b>\n\n"
         message += f"📊 <b>Chain:</b> {chain_info}\n"
-        message += f"⚠️ <b>Alert Count:</b> {alert_count} markets\n"
+        message += f"⚠️ <b>Acceleration Alerts:</b> {alert_count} markets\n"
         if markets_cached:
             message += f"⏭️ <b>Skipped (cached):</b> {len(markets_cached)} markets\n"
         message += f"\n"
@@ -282,8 +283,9 @@ class Notifier:
             maturity_date = datetime.fromisoformat(market.expiry.replace('Z', '+00:00')).strftime('%Y-%m-%d')
             
             # Format numbers for display
-            decline_rate = abs(analysis.latest_daily_decline_rate)
-            avg_decline_rate = abs(analysis.average_decline_rate)
+            decay_rate = abs(analysis.latest_daily_decline_rate)
+            avg_decay_rate = abs(analysis.average_decline_rate)
+            acceleration = decay_rate - avg_decay_rate
             volume_usd = analysis.volume_usd
             implied_apy = analysis.implied_apy * 100 if analysis.implied_apy > 0 else 0
             
@@ -291,7 +293,8 @@ class Notifier:
             market_link = f"https://app.pendle.finance/trade/markets/{market.address}/swap?view=yt"
             
             message += f"📈 <b>Market #{i}:</b> {market.name}\n"
-            message += f"   📊 <b>Decline Rate:</b> {decline_rate:.2f}%/day (avg: {avg_decline_rate:.2f}%)\n"
+            message += f"   🚀 <b>Decay Acceleration:</b> {decay_rate:.2f}%/day (avg: {avg_decay_rate:.2f}%/day)\n"
+            message += f"   ⚡ <b>Acceleration:</b> +{acceleration:.2f}% vs average\n"
             message += f"   💰 <b>Volume (USD):</b> ${volume_usd:,.0f}\n"
             message += f"   📈 <b>Implied APY:</b> {implied_apy:.2f}%\n"
             message += f"   📅 <b>Maturity:</b> {maturity_date}\n"

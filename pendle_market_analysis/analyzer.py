@@ -147,15 +147,17 @@ class PendleAnalyzer:
             volume_usd = self.calculate_volume_fast(transactions)
             implied_apy = self.calculate_average_implied_apy_fast(transactions)
             
-            # Check alert condition - both conditions must be met:
-            # 1. Current decline rate exceeds average by threshold
-            # 2. Absolute decline rate is above minimum threshold (5%)
-            decline_rate_exceeds_average = (abs(latest_daily_decline_rate) > abs(average_decline_rate) * self.ALERT_DECLINE_RATE_THRESHOLD) and \
+            # Check alert condition - focus on ACCELERATION of decay:
+            # 1. Latest daily decline rate is more negative than average (acceleration)
+            # 2. Acceleration magnitude exceeds minimum threshold
+            # Note: We use signed values to detect acceleration (worsening) vs just magnitude
+            decline_rate_exceeds_average = (latest_daily_decline_rate < average_decline_rate * self.ALERT_DECLINE_RATE_THRESHOLD) and \
                                           (abs(latest_daily_decline_rate) > self.MIN_DECLINE_RATE_THRESHOLD)
             
-            print(f"    ✅ Rate: {abs(latest_daily_decline_rate):.2f}%/day (avg: {abs(average_decline_rate):.2f}%)")
+            print(f"    ✅ Decay: {abs(latest_daily_decline_rate):.2f}%/day (avg: {abs(average_decline_rate):.2f}%)")
             if decline_rate_exceeds_average:
-                print(f"    🚨 ALERT TRIGGERED: {market.name} - {abs(latest_daily_decline_rate):.2f}% vs avg {abs(average_decline_rate):.2f}%")
+                acceleration = abs(latest_daily_decline_rate) - abs(average_decline_rate)
+                print(f"    🚨 ACCELERATION ALERT: {market.name} - {abs(latest_daily_decline_rate):.2f}% vs avg {abs(average_decline_rate):.2f}% (+{acceleration:.2f}%)")
             
             return DeclineRateAnalysis(
                 market=market,

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Backward compatibility wrapper for Pendle Market Analysis
-Uses the new modular structure while maintaining the original API
+Enhanced Pendle Market Analysis with Advanced Optimizations
+Features caching, rate limiting, batch processing, and comprehensive monitoring
+Maintains backward compatibility while providing enhanced performance
 """
 
 import asyncio
@@ -25,9 +26,9 @@ except ImportError:
     print("⚠️ python-dotenv not installed. Please install it: pip install python-dotenv")
     pass
 
-# Import from the new modular structure
+# Import from the optimized modular structure
 from pendle_market_analysis.models import Market, Transaction, DeclineRateAnalysis, PendleApiError
-from pendle_market_analysis.api_client import PendleAPIClient
+from pendle_market_analysis.api_client import PendleAPIClient  # Now uses optimized version
 from pendle_market_analysis.analyzer import PendleAnalyzer
 from pendle_market_analysis.notifier import Notifier
 from pendle_market_analysis.orchestrator import AnalysisOrchestrator

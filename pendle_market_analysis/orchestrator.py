@@ -22,12 +22,13 @@ class AnalysisOrchestrator:
     """Orchestrates the complete analysis workflow"""
     
     # Performance optimization settings
-    MAX_CONCURRENT_MARKETS = 2  # Reduced for better rate limiting
-    MARKETS_TO_ANALYZE = 10  # Process markets number
-    MARKET_BATCH_DELAY = 5  # Reduced from 9 seconds
+    MAX_CONCURRENT_MARKETS = 3  # Increased with optimized client
+    MARKETS_TO_ANALYZE = 15  # Process more markets with optimizations
+    MARKET_BATCH_DELAY = 3  # Reduced due to better rate limiting
     
     def __init__(self, chain_id: int = 1, cache_duration_hours: int = 24):
         self.chain_id = chain_id
+        # Use optimized API client with advanced features
         self.api_client = PendleAPIClient(chain_id)
         self.analyzer = PendleAnalyzer()
         self.notifier = Notifier(chain_id, self.api_client.chain_name, cache_duration_hours)
@@ -119,12 +120,23 @@ class AnalysisOrchestrator:
                 # Send Telegram alerts for markets with decline rate issues
                 await self.notifier.send_telegram_alerts(alert_markets)
                 
-                # Performance summary
+                # Performance summary with optimized client metrics
                 elapsed_time = time.time() - start_time
                 print(f"\n⚡ PERFORMANCE SUMMARY:")
                 print(f"  ⏱️ Total Time: {elapsed_time:.1f} seconds")
                 print(f"  📊 Markets/Second: {len(analysis_results)/elapsed_time:.2f}")
-                print(f"  🎯 Target Achieved: Accurate decline rate analysis with rate limiting")
+                
+                # Get optimized client metrics
+                if hasattr(self.api_client, 'get_metrics_summary'):
+                    metrics = self.api_client.get_metrics_summary()
+                    print(f"  📈 API Performance:")
+                    print(f"    - Total requests: {metrics['total_requests']}")
+                    print(f"    - Cache hit rate: {metrics['cache_hit_rate']:.1%}")
+                    print(f"    - Avg response time: {metrics['avg_response_time_ms']:.1f}ms")
+                    print(f"    - Rate limited requests: {metrics['rate_limited_requests']}")
+                    print(f"    - Computing units remaining: {metrics['computing_units_remaining']}")
+                
+                print(f"  🎯 Target Achieved: Accurate decline rate analysis with optimized rate limiting")
                 
                 return analysis_results, alert_markets
                 
